@@ -27,7 +27,7 @@
 | ⑤ | 回到 VS Code，点 GitPilot 面板的 **「Login with GitHub」** |
 | ⑥ | 选择「🔑 Personal Access Token」→ 粘贴 Token → 回车 |
 
-#### 方式 2：浏览器 OAuth 登录
+#### 方式 2：浏览器 OAuth 登录（本人没试过这个，不行的话再反馈给我！）
 
 | 步骤 | 操作 |
 |------|------|
