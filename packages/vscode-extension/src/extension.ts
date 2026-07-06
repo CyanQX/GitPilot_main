@@ -106,6 +106,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.commands.registerCommand('gitpilot.switchRepo', handleSwitchRepo));
   context.subscriptions.push(vscode.commands.registerCommand('gitpilot.refreshRepos', handleRefreshRepos));
   context.subscriptions.push(vscode.commands.registerCommand('gitpilot.refreshStatus', handleRefreshStatus));
+  context.subscriptions.push(vscode.commands.registerCommand('gitpilot.linkRepo', handleLinkRepo));
   context.subscriptions.push(vscode.commands.registerCommand('gitpilot.configureBuild', handleConfigureBuild));
 }
 
@@ -139,7 +140,7 @@ async function handleDeploy(): Promise<void> {
     { location: vscode.ProgressLocation.Notification, title: 'GitPilot 部署中...', cancellable: true },
     async (progress, token) => {
       const result = await orchestrator!.deploy();
-      if (!token.isCancellationRequested) showDeployResult(result);
+      if (!token.isCancellationRequested) await showDeployResult(result);
     },
   );
   } catch (e: any) { vscode.window.showErrorMessage(`部署异常: ${e.message}`); logger.error('Deploy error: ' + e.message); }
@@ -150,7 +151,7 @@ async function handleSync(): Promise<void> {
   if (!orchestrator) { vscode.window.showWarningMessage('请先登录 GitHub'); return; }
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'GitPilot 同步中...' },
-    async () => { const r = await orchestrator!.sync(); showDeployResult(r); },
+    async () => { const r = await orchestrator!.sync(); await showDeployResult(r); },
   );
   } catch (e: any) { vscode.window.showErrorMessage(`同步异常: ${e.message}`); }
 }
@@ -325,6 +326,58 @@ async function handleRefreshRepos(): Promise<void> {
   } catch (e: any) { vscode.window.showErrorMessage(`刷新失败: ${e.message}`); }
 }
 
+// ⭐ 一键关联 GitHub 仓库
+async function handleLinkRepo(): Promise<void> {
+  try {
+    const repos = await repoProvider.listRepos();
+    if (repos.length === 0) {
+      const create = await vscode.window.showInformationMessage(
+        '你还没有 GitHub 仓库，是否创建一个？',
+        '创建仓库',
+      );
+      if (create === '创建仓库') {
+        vscode.commands.executeCommand('gitpilot.createRepo');
+      }
+      return;
+    }
+
+    const items = repos.map((r) => ({
+      label: r.fullName,
+      description: r.private ? '🔒' : '🌐',
+      detail: r.cloneUrl,
+      repo: r,
+    }));
+
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: '选择要关联的 GitHub 仓库',
+      title: 'GitPilot · 关联远程仓库',
+      matchOnDescription: true,
+    });
+    if (!picked) return;
+
+    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!wsRoot) { vscode.window.showErrorMessage('未打开工作区'); return; }
+
+    if (!gitProvider) gitProvider = new VSCodeGitProvider(wsRoot);
+
+    const isRepo = await gitProvider.isRepo();
+    if (!isRepo) await gitProvider.init();
+
+    // 添加 origin 远程（如果已存在则跳过）
+    const existingUrl = await gitProvider.getRemoteUrl('origin').catch(() => null);
+    if (!existingUrl) {
+      await gitProvider.addRemote('origin', picked.repo.cloneUrl);
+    }
+    sidebarProvider.setRepoName(picked.repo.fullName);
+    vscode.window.showInformationMessage(`🔗 已关联: ${picked.repo.fullName}`);
+
+    // 关联后重新初始化 orchestrator
+    await initOrchestrator();
+  } catch (e: any) {
+    vscode.window.showErrorMessage(`关联失败: ${e.message}`);
+  }
+}
+
 // ⭐ 真实刷新状态（3-7s 随机延迟 + 10s 超时）
 async function handleRefreshStatus(): Promise<void> {
   // 通知侧边栏开始加载动画
@@ -392,7 +445,7 @@ async function handleConfigureBuild(): Promise<void> {
 }
 
 // ---- 部署结果展示 ----
-function showDeployResult(result: DeployResult): void {
+async function showDeployResult(result: DeployResult): Promise<void> {
   if (result.success && result.status === 'no-changes') return;
   if (result.success) {
     notifier.show({
@@ -404,11 +457,25 @@ function showDeployResult(result: DeployResult): void {
       ],
     });
   } else {
-    notifier.show({
+    const isOriginMissing = result.error?.startsWith('ORIGIN_MISSING:');
+    const displayMsg = isOriginMissing
+      ? '本地仓库未关联 GitHub 远程地址'
+      : (result.error ?? '未知错误');
+
+    const actionId = await notifier.show({
       type: 'error', title: '❌ 部署失败',
-      message: result.error ?? '未知错误',
-      actions: [{ label: '重试', id: 'retry' }],
+      message: displayMsg,
+      actions: [
+        ...(isOriginMissing ? [{ label: '🔗 关联仓库', id: 'link-repo' }] : []),
+        { label: '重试', id: 'retry' },
+      ],
     });
+
+    if (actionId === 'link-repo') {
+      await handleLinkRepo();
+    } else if (actionId === 'retry') {
+      vscode.commands.executeCommand('gitpilot.deploy');
+    }
   }
 }
 

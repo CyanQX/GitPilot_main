@@ -69,14 +69,14 @@ export class VSCodeGitProvider implements IGitProvider {
       if (!remoteExists) {
         return {
           success: false, pushed: false,
-          error: `远程仓库 "${remote}" 未配置。请先创建 GitHub 仓库或执行: git remote add ${remote} <url>`,
+          error: 'ORIGIN_MISSING:未关联GitHub仓库',
           nonFastForward: false,
         };
       }
     } catch {
       return {
         success: false, pushed: false,
-        error: '当前目录不是 Git 仓库。请先点击「创建仓库」在 GitHub 创建并关联。',
+        error: 'ORIGIN_MISSING:当前目录非Git仓库',
         nonFastForward: false,
       };
     }
