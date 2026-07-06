@@ -513,21 +513,36 @@ async function showDeployResult(result: DeployResult): Promise<void> {
     }
   } else {
     const isOriginMissing = result.error?.startsWith('ORIGIN_MISSING:');
-    const displayMsg = isOriginMissing
-      ? '本地仓库未关联 GitHub 远程地址'
-      : (result.error ?? '未知错误');
+    const isNetworkError = result.error?.startsWith('NETWORK_');
+
+    let displayMsg: string;
+    if (isOriginMissing) {
+      displayMsg = '本地仓库未关联 GitHub 远程地址';
+    } else if (isNetworkError) {
+      // ⭐ 网络错误 → 提取友好消息（去掉前缀）
+      displayMsg = (result.error ?? '').replace(/^NETWORK_\w+:/, '');
+    } else {
+      displayMsg = result.error ?? '未知错误';
+    }
+
+    const actions: { label: string; id: string }[] = [];
+    if (isOriginMissing) actions.push({ label: '🔗 关联仓库', id: 'link-repo' });
+    if (isNetworkError) actions.push({ label: '⏳ 3秒后重试', id: 'retry-delayed' });
+    actions.push({ label: '重试', id: 'retry' });
 
     const actionId = await notifier.show({
       type: 'error', title: '❌ 部署失败',
       message: displayMsg,
-      actions: [
-        ...(isOriginMissing ? [{ label: '🔗 关联仓库', id: 'link-repo' }] : []),
-        { label: '重试', id: 'retry' },
-      ],
+      actions,
     });
 
     if (actionId === 'link-repo') {
       await handleLinkRepo();
+    } else if (actionId === 'retry-delayed') {
+      // ⭐ 网络错误：等 3 秒再重试
+      vscode.window.showInformationMessage('⏳ 3 秒后自动重试...');
+      await new Promise(r => setTimeout(r, 3000));
+      vscode.commands.executeCommand('gitpilot.deploy');
     } else if (actionId === 'retry') {
       vscode.commands.executeCommand('gitpilot.deploy');
     }

@@ -120,8 +120,24 @@ export class VSCodeGitProvider implements IGitProvider {
       const r = await this.git.push(remote, target);
       return { success: true, pushed: r.pushed?.length > 0 && !r.pushed[0]?.alreadyUpdated };
     } catch (e: any) {
-      const nff = e.message?.includes('non-fast-forward') || e.message?.includes('rejected');
-      return { success: false, pushed: false, error: e.message, nonFastForward: nff };
+      const msg: string = e.message ?? '';
+      const nff = msg.includes('non-fast-forward') || msg.includes('rejected');
+
+      // ⭐ 检测网络错误，给出友好提示
+      if (msg.includes('Connection was reset') || msg.includes('Connection reset')) {
+        return { success: false, pushed: false, error: 'NETWORK_RESET:网络连接被重置，请检查网络或稍后重试', nonFastForward: false };
+      }
+      if (msg.includes('unable to access') || msg.includes('Could not resolve host')) {
+        return { success: false, pushed: false, error: 'NETWORK_UNREACHABLE:无法访问 GitHub，请检查网络连接', nonFastForward: false };
+      }
+      if (msg.includes('timeout') || msg.includes('timed out')) {
+        return { success: false, pushed: false, error: 'NETWORK_TIMEOUT:连接 GitHub 超时，请检查网络或代理设置', nonFastForward: false };
+      }
+      if (msg.includes('Recv failure')) {
+        return { success: false, pushed: false, error: 'NETWORK_RESET:网络连接被重置，请检查网络或稍后重试', nonFastForward: false };
+      }
+
+      return { success: false, pushed: false, error: msg, nonFastForward: nff };
     }
   }
 
