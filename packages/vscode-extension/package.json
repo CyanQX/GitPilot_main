@@ -2,7 +2,7 @@
   "name": "gitpilot",
   "displayName": "GitPilot",
   "description": "🚀 写代码 → 点部署 → GitHub 上就有了。全程不离开 VS Code。",
-  "version": "1.1.1",
+  "version": "1.2.1",
   "publisher": "gitpilot",
   "license": "MIT",
   "engines": { "vscode": "^1.85.0" },
@@ -21,6 +21,7 @@
       { "command": "gitpilot.deleteRepo", "title": "GitPilot: Delete Repository" },
       { "command": "gitpilot.switchRepo", "title": "GitPilot: Switch Repository" },
       { "command": "gitpilot.refreshRepos", "title": "GitPilot: Refresh Repository List" },
+      { "command": "gitpilot.refreshStatus", "title": "GitPilot: Refresh Status" },
       { "command": "gitpilot.showDeployLog", "title": "GitPilot: Show Deploy Log" },
       { "command": "gitpilot.openOnGitHub", "title": "GitPilot: Open on GitHub" },
       { "command": "gitpilot.configureBuild", "title": "GitPilot: Configure Build Command" }

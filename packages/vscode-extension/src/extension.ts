@@ -105,6 +105,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.commands.registerCommand('gitpilot.createRepo', handleCreateRepo));
   context.subscriptions.push(vscode.commands.registerCommand('gitpilot.switchRepo', handleSwitchRepo));
   context.subscriptions.push(vscode.commands.registerCommand('gitpilot.refreshRepos', handleRefreshRepos));
+  context.subscriptions.push(vscode.commands.registerCommand('gitpilot.refreshStatus', handleRefreshStatus));
   context.subscriptions.push(vscode.commands.registerCommand('gitpilot.configureBuild', handleConfigureBuild));
 }
 
@@ -186,7 +187,7 @@ async function loginWithPAT(): Promise<void> {
   const user = await authProvider.getUserInfo(token);
   await tokenManager.save(user.login, token, 'github');
 
-  await completeLogin(token, user.login);
+  await completeLogin(token, user.login, user.avatarUrl ?? undefined);
 }
 
 // ---- 浏览器 OAuth 登录（新流程） ----
@@ -212,11 +213,11 @@ async function loginWithBrowserOAuth(): Promise<void> {
   const user = await authProvider.getUserInfo(authToken.accessToken);
   await tokenManager.save(user.login, authToken.accessToken, 'github');
 
-  await completeLogin(authToken.accessToken, user.login);
+  await completeLogin(authToken.accessToken, user.login, user.avatarUrl ?? undefined);
 }
 
 // ---- 登录完成后的统一处理 ----
-async function completeLogin(token: string, login: string): Promise<void> {
+async function completeLogin(token: string, login: string, avatarUrl?: string): Promise<void> {
   octokit = new Octokit({ auth: token });
   repoProvider = new GitHubRepositoryProvider(octokit);
   releaseProvider = new GitHubReleaseProvider(octokit);
@@ -224,7 +225,7 @@ async function completeLogin(token: string, login: string): Promise<void> {
   await initOrchestrator();
   vscode.commands.executeCommand('setContext', 'gitpilot:loggedIn', true);
   vscode.window.showInformationMessage(`✅ 已登录: ${login}`);
-  sidebarProvider.setLoggedIn(login);
+  sidebarProvider.setLoggedIn(login, avatarUrl);
 }
 
 async function handleLogout(): Promise<void> {
@@ -285,6 +286,56 @@ async function handleRefreshRepos(): Promise<void> {
   } catch (e: any) { vscode.window.showErrorMessage(`刷新失败: ${e.message}`); }
 }
 
+// ⭐ 真实刷新状态（3-7s 随机延迟 + 10s 超时）
+async function handleRefreshStatus(): Promise<void> {
+  // 通知侧边栏开始加载动画
+  sidebarProvider.postMessage({ refreshState: 'start' });
+
+  // 根据网络速度模拟 3-7 秒随机延迟
+  const networkDelay = Math.floor(Math.random() * 4000) + 3000; // 3000~7000ms
+  const timeoutMs = 10000; // 10 秒超时
+
+  try {
+    const result = await Promise.race([
+      (async () => {
+        // 模拟网络延迟
+        await new Promise(r => setTimeout(r, networkDelay));
+
+        // 实际刷新操作：获取仓库列表 + Git 状态
+        const repos = await repoProvider.listRepos();
+        let gitStatusInfo = '';
+        try {
+          if (orchestrator) {
+            const hasChanges = await orchestrator.hasPendingChanges();
+            gitStatusInfo = hasChanges ? ' · 有未部署变更' : ' · 已是最新';
+          }
+        } catch { /* git status 非关键 */ }
+
+        return { repos, gitStatusInfo };
+      })(),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error('TIMEOUT')), timeoutMs)
+      ),
+    ]);
+
+    // 刷新成功
+    const statusMsg = `已同步 ${result.repos.length} 个仓库${result.gitStatusInfo}`;
+    sidebarProvider.postMessage({
+      refreshState: 'done',
+      statusText: statusMsg,
+      status: '✅ 就绪',
+    });
+  } catch (e: any) {
+    // 超时或错误
+    logger.error('Refresh error: ' + (e.message ?? String(e)));
+    sidebarProvider.postMessage({
+      refreshState: 'error',
+      statusText: '报错！请检查网络是否正常',
+      status: '❌ 刷新失败',
+    });
+  }
+}
+
 async function handleConfigureBuild(): Promise<void> {
   const config = vscode.workspace.getConfiguration('gitpilot');
   const cmd = await vscode.window.showInputBox({
@@ -334,9 +385,32 @@ async function initOrchestrator(): Promise<void> {
     blockSecrets: config.get<boolean>('security.blockSecrets'),
   });
 
-  const branch = await gitProvider.getCurrentBranch().catch(() => 'main');
+  // ⭐ 智能检测当前分支：先查当前分支，失败则列本地分支取第一个
+  let branch = 'main';
+  try {
+    const b = await gitProvider.getCurrentBranch();
+    if (b && b !== 'HEAD') branch = b;
+  } catch {
+    // getCurrentBranch 失败，尝试回退
+    try {
+      const status = await gitProvider.getStatus();
+      if (status.currentBranch && status.currentBranch !== 'HEAD' && status.currentBranch !== 'unknown') {
+        branch = status.currentBranch;
+      }
+    } catch { /* 保持 main 作为默认值 */ }
+  }
+
   const remoteUrl = await gitProvider.getRemoteUrl().catch(() => null);
   const repoName = parseRepoFromUrl(remoteUrl);
+
+  // ⭐ 更新侧边栏仓库信息
+  if (repoName) {
+    sidebarProvider.setRepoName(repoName.fullName);
+  }
+  const buildCmd = config.get<string>('build.command');
+  if (buildCmd) {
+    sidebarProvider.setBuildCmd(buildCmd);
+  }
 
   const deployConfig: DeployConfig = {
     repo: { owner: repoName?.owner ?? 'unknown', name: repoName?.name ?? 'unknown', fullName: repoName ? `${repoName.owner}/${repoName.name}` : 'unknown' },
@@ -378,7 +452,7 @@ async function autoRestoreSession(context: vscode.ExtensionContext): Promise<voi
   // 获取用户名用于侧边栏显示
   try {
     const user = await authProvider.getUserInfo(token);
-    sidebarProvider.setLoggedIn(user.login);
+    sidebarProvider.setLoggedIn(user.login, user.avatarUrl ?? undefined);
   } catch {
     sidebarProvider.setLoggedIn('GitHub');
   }

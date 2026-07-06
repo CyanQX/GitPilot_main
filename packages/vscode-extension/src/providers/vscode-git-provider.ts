@@ -62,7 +62,24 @@ export class VSCodeGitProvider implements IGitProvider {
   }
 
   async push(remote: string = 'origin', branch?: string): Promise<PushResult> {
-    const target = branch ?? (await this.getCurrentBranch());
+    let target = branch ?? (await this.getCurrentBranch());
+
+    // ⭐ 验证分支是否存在于本地，不存在则回退到当前分支
+    try {
+      await this.git.raw(['rev-parse', '--verify', target]);
+    } catch {
+      const fallback = await this.getCurrentBranch();
+      if (fallback && fallback !== 'HEAD') {
+        target = fallback;
+      } else {
+        return {
+          success: false, pushed: false,
+          error: `本地分支 "${branch ?? target}" 不存在。请先在 Git 中创建初始提交（git commit）。`,
+          nonFastForward: false,
+        };
+      }
+    }
+
     try {
       await this.git.fetch(remote);
       const s = await this.git.status();
