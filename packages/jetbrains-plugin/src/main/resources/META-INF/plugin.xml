@@ -42,8 +42,13 @@
                 text="Sync" icon="AllIcons.Actions.Refresh">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt S"/>
             </action>
+            <separator/>
             <action id="GitPilot.Login" class="com.gitpilot.actions.LoginAction" text="Login to GitHub"/>
             <action id="GitPilot.Logout" class="com.gitpilot.actions.LogoutAction" text="Logout"/>
+            <separator/>
+            <action id="GitPilot.CreateRepo" class="com.gitpilot.actions.CreateRepoAction" text="Create Repository"/>
+            <action id="GitPilot.SwitchRepo" class="com.gitpilot.actions.SwitchRepoAction" text="Switch Repository"/>
+            <separator/>
             <action id="GitPilot.ConfigureBuild" class="com.gitpilot.actions.ConfigureBuildAction" text="Configure Build"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </group>

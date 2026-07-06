@@ -84,6 +84,7 @@ class GitHubRepoProvider(private var token: String) : IRepoProvider {
         owner = (json["owner"] as Map<String, Any>)["login"] as String,
         isPrivate = json["private"] as Boolean,
         htmlUrl = json["html_url"] as String,
-        defaultBranch = json["default_branch"] as String
+        cloneUrl = json["clone_url"] as String,
+        defaultBranch = json["default_branch"] as? String ?: "main"
     )
 }
