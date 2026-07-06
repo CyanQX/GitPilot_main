@@ -493,9 +493,13 @@ async function handleConfigureBuild(): Promise<void> {
 async function showDeployResult(result: DeployResult): Promise<void> {
   if (result.success && result.status === 'no-changes') return;
   if (result.success) {
+    // ⭐ 从步骤中提取暂存文件数
+    const stageStep = result.steps?.find((s: any) => s.name === '暂存文件');
+    const fileInfo = stageStep?.details ? ` · ${stageStep.details}` : '';
+
     const actionId = await notifier.show({
       type: 'success', title: '🚀 部署成功！',
-      message: `提交: ${result.commitHash?.substring(0, 7) ?? '--'} · 耗时 ${(result.totalDurationMs / 1000).toFixed(1)}s`,
+      message: `提交: ${result.commitHash?.substring(0, 7) ?? '--'}${fileInfo} · 耗时 ${(result.totalDurationMs / 1000).toFixed(1)}s`,
       actions: [
         { label: '在 GitHub 上查看', id: 'open-repo' },
         ...(result.releaseUrl ? [{ label: '查看 Release', id: 'open-release' }] : []),

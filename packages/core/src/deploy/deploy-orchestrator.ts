@@ -170,15 +170,25 @@ export class DeployOrchestrator implements IDeployOrchestrator {
       // ── Step 5: 暂存 ──
       const stepStage = this.createStep('暂存文件');
       this.emit('staging', stepStage);
-      // ⭐ 先 add 全部，再排除 blocked 文件（密钥/构建产物等）
+      // ⭐ git add -A 全部 → 排除 blocked 文件（密钥/构建产物等）
       await this.gitProvider.stageFiles(filterResult.blocked.map((b) => b.file));
+      // ⭐ 验证暂存结果
+      const stagedFiles = await this.gitProvider.getStagedFiles();
       stepStage.status = 'success';
-      stepStage.details = `${filterResult.allowed.length} 个文件待提交`;
+      stepStage.details = stagedFiles.length > 0
+        ? `已暂存 ${stagedFiles.length} 个文件`
+        : `${filterResult.allowed.length} 个文件待提交`;
       if (filterResult.blocked.length > 0) {
         stepStage.details += `，已排除 ${filterResult.blocked.length} 个`;
       }
       this.finishStep(stepStage);
       steps.push(stepStage);
+
+      // 如果没有文件被暂存，跳过提交
+      if (stagedFiles.length === 0 && filterResult.allowed.length === 0) {
+        this.currentStatus = 'no-changes';
+        return { success: true, status: 'no-changes', steps, totalDurationMs: Date.now() - startTime };
+      }
 
       // ── Step 6: 提交 ──
       const stepCommit = this.createStep('提交变更');

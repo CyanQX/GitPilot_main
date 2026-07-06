@@ -19,7 +19,10 @@ export interface IGitProvider {
   hasChanges(): Promise<boolean>;
 
   /** 暂存所有文件，排除指定文件（密钥/构建产物等） */
-  stageFiles(files?: string[]): Promise<void>;
+  stageFiles(excludeFiles?: string[]): Promise<void>;
+
+  /** 获取当前已暂存的文件列表 */
+  getStagedFiles(): Promise<string[]>;
 
   /** 提交 */
   commit(message: string): Promise<CommitResult>;
