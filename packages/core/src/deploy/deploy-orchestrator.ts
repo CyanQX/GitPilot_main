@@ -69,7 +69,11 @@ export class DeployOrchestrator implements IDeployOrchestrator {
       this.emit('staging', stepCheck);
 
       const hasChanges = await this.gitProvider.hasChanges();
-      if (!hasChanges) {
+      const gitStatus = await this.gitProvider.getStatus();
+      const hasUnpushedCommits = (gitStatus.ahead ?? 0) > 0;
+
+      // ⭐ 既没有文件变更，也没有未推送的提交 → 跳过
+      if (!hasChanges && !hasUnpushedCommits) {
         stepCheck.status = 'skipped';
         stepCheck.details = '没有需要部署的变更';
         this.finishStep(stepCheck);
@@ -77,6 +81,38 @@ export class DeployOrchestrator implements IDeployOrchestrator {
         this.currentStatus = 'no-changes';
         return { success: true, status: 'no-changes', steps, totalDurationMs: Date.now() - startTime };
       }
+
+      // ⭐ 有未推送提交但无文件变更 → 跳过暂存/提交，直接推送
+      if (!hasChanges && hasUnpushedCommits) {
+        stepCheck.status = 'success';
+        stepCheck.details = `无新变更，但 ${gitStatus.ahead} 个提交未推送`;
+        this.finishStep(stepCheck);
+        steps.push(stepCheck);
+
+        // 直接跳到推送
+        const stepPush = this.createStep('推送到远端');
+        this.emit('pushing', stepPush);
+        const pushResult = await this.gitProvider.push('origin', this.config.branch);
+        if (!pushResult.success) {
+          stepPush.status = 'failed';
+          stepPush.error = pushResult.error;
+          this.finishStep(stepPush);
+          steps.push(stepPush);
+          this.currentStatus = 'failed';
+          return {
+            success: false, status: 'failed', steps,
+            error: `推送失败: ${pushResult.error}`,
+            totalDurationMs: Date.now() - startTime,
+          };
+        }
+        stepPush.status = 'success';
+        stepPush.details = '已推送';
+        this.finishStep(stepPush);
+        steps.push(stepPush);
+        this.currentStatus = 'success';
+        return { success: true, status: 'success', steps, totalDurationMs: Date.now() - startTime };
+      }
+
       stepCheck.status = 'success';
       this.finishStep(stepCheck);
       steps.push(stepCheck);
@@ -85,7 +121,6 @@ export class DeployOrchestrator implements IDeployOrchestrator {
       const stepFilter = this.createStep('智能文件过滤');
       this.emit('staging', stepFilter);
 
-      const gitStatus = await this.gitProvider.getStatus();
       const allChanged = [
         ...gitStatus.modified,
         ...gitStatus.added,
