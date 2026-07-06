@@ -34,15 +34,16 @@ import { promptBrowserSelection, performBrowserOAuth } from './providers/browser
 // ---- 全局状态 ----
 let orchestrator: DeployOrchestrator | null = null;
 let tokenManager: TokenManager;
-let repoProvider: GitHubRepositoryProvider;
+let repoProvider: GitHubRepositoryProvider | null = null;
 let authProvider: GitHubAuthProvider;
-let releaseProvider: GitHubReleaseProvider;
-let gitProvider: VSCodeGitProvider;
+let releaseProvider: GitHubReleaseProvider | null = null;
+let gitProvider: VSCodeGitProvider | null = null;
 let notifier: VSCodeNotificationProvider;
 let fileWatcher: VSCodeFileWatcherProvider;
 let sidebarProvider: SidebarProvider;
 let octokit: Octokit | null = null;
 let scheduledTimer: ReturnType<typeof setInterval> | null = null;
+let isLoggedIn = false;
 
 const logger = new Logger('VSCode');
 const OAUTH_CLIENT_ID = 'your-github-oauth-app-client-id'; // TODO: 替换
@@ -57,11 +58,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tokenManager = new TokenManager(secretStorage);
     notifier = new VSCodeNotificationProvider();
 
-    // 初始化 GitHub Provider（Token 稍后注入）
-    octokit = new Octokit();
-    repoProvider = new GitHubRepositoryProvider(octokit);
+    // GitHub Auth Provider 不需要 Token 即可创建
     authProvider = new GitHubAuthProvider(OAUTH_CLIENT_ID);
-    releaseProvider = new GitHubReleaseProvider(octokit);
+    // ⭐ 其他 Provider 等登录后再初始化（避免触发 VS Code 内置 GitHub 登录弹窗）
+    repoProvider = null;
+    releaseProvider = null;
+    octokit = null;
 
     // 注册侧边栏
     sidebarProvider = new SidebarProvider(context.extensionUri);
@@ -111,6 +113,15 @@ function registerCommands(context: vscode.ExtensionContext): void {
 }
 
 // ---- 命令处理 ----
+/** 确保已登录，未登录则提示并返回 false */
+function ensureLoggedIn(): boolean {
+  if (!isLoggedIn || !octokit || !repoProvider) {
+    vscode.window.showWarningMessage('请先登录 GitHub');
+    return false;
+  }
+  return true;
+}
+
 async function handleDeploy(): Promise<void> {
   try {
   if (!orchestrator) { vscode.window.showWarningMessage('请先登录 GitHub'); return; }
@@ -239,6 +250,7 @@ async function completeLogin(token: string, login: string, avatarUrl?: string): 
   octokit = new Octokit({ auth: token });
   repoProvider = new GitHubRepositoryProvider(octokit);
   releaseProvider = new GitHubReleaseProvider(octokit);
+  isLoggedIn = true;
 
   await initOrchestrator();
   vscode.commands.executeCommand('setContext', 'gitpilot:loggedIn', true);
@@ -251,12 +263,17 @@ async function handleLogout(): Promise<void> {
   if (confirm !== '登出') return;
   await tokenManager.clearAll();
   orchestrator = null;
+  octokit = null;
+  repoProvider = null;
+  releaseProvider = null;
+  isLoggedIn = false;
   vscode.commands.executeCommand('setContext', 'gitpilot:loggedIn', false);
   vscode.window.showInformationMessage('已登出');
   sidebarProvider.setLoggedOut();
 }
 
 async function handleSwitchAccount(): Promise<void> {
+  if (!ensureLoggedIn()) return;
   const accounts = await tokenManager.getAccounts();
   if (accounts.length === 0) { vscode.window.showInformationMessage('无已保存账号'); return; }
   const items = accounts.map((a) => ({ label: a.login, description: `${a.platform} · ${new Date(a.lastUsedAt).toLocaleDateString()}` }));
@@ -274,6 +291,7 @@ async function handleSwitchAccount(): Promise<void> {
 }
 
 async function handleCreateRepo(): Promise<void> {
+  if (!ensureLoggedIn()) return;
   const name = await vscode.window.showInputBox({ prompt: '仓库名称', placeHolder: 'my-project' });
   if (!name) return;
   const priv = await vscode.window.showQuickPick(['公开', '私有'], { placeHolder: '可见性' });
@@ -307,8 +325,9 @@ async function handleCreateRepo(): Promise<void> {
 }
 
 async function handleSwitchRepo(): Promise<void> {
+  if (!ensureLoggedIn()) return;
   try {
-    const repos = await repoProvider.listRepos();
+    const repos = await repoProvider!.listRepos();
     const items = repos.map((r) => ({
       label: r.fullName,
       description: r.private ? '🔒 Private' : '🌐 Public',
@@ -320,16 +339,18 @@ async function handleSwitchRepo(): Promise<void> {
 }
 
 async function handleRefreshRepos(): Promise<void> {
+  if (!ensureLoggedIn()) return;
   try {
-    const repos = await repoProvider.listRepos();
+    const repos = await repoProvider!.listRepos();
     vscode.window.showInformationMessage(`找到 ${repos.length} 个仓库`);
   } catch (e: any) { vscode.window.showErrorMessage(`刷新失败: ${e.message}`); }
 }
 
 // ⭐ 一键关联 GitHub 仓库
 async function handleLinkRepo(): Promise<void> {
+  if (!ensureLoggedIn()) return;
   try {
-    const repos = await repoProvider.listRepos();
+    const repos = await repoProvider!.listRepos();
     if (repos.length === 0) {
       const create = await vscode.window.showInformationMessage(
         '你还没有 GitHub 仓库，是否创建一个？',
@@ -380,6 +401,10 @@ async function handleLinkRepo(): Promise<void> {
 
 // ⭐ 真实刷新状态（3-7s 随机延迟 + 10s 超时）
 async function handleRefreshStatus(): Promise<void> {
+  if (!ensureLoggedIn()) {
+    sidebarProvider.postMessage({ refreshState: 'error', statusText: '请先登录', status: '❌ 未登录' });
+    return;
+  }
   // 通知侧边栏开始加载动画
   sidebarProvider.postMessage({ refreshState: 'start' });
 
@@ -394,7 +419,7 @@ async function handleRefreshStatus(): Promise<void> {
         await new Promise(r => setTimeout(r, networkDelay));
 
         // 实际刷新操作：获取仓库列表 + Git 状态
-        const repos = await repoProvider.listRepos();
+        const repos = await repoProvider!.listRepos();
         let gitStatusInfo = '';
         try {
           if (orchestrator) {
@@ -481,6 +506,10 @@ async function showDeployResult(result: DeployResult): Promise<void> {
 
 // ---- 初始化 Orchestrator ----
 async function initOrchestrator(): Promise<void> {
+  if (!repoProvider || !releaseProvider) {
+    logger.warn('GitHub Provider 未初始化，请先登录');
+    return;
+  }
   const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!wsRoot) { logger.warn('未打开工作区'); return; }
 
@@ -552,6 +581,7 @@ async function autoRestoreSession(context: vscode.ExtensionContext): Promise<voi
   octokit = new Octokit({ auth: token });
   repoProvider = new GitHubRepositoryProvider(octokit);
   releaseProvider = new GitHubReleaseProvider(octokit);
+  isLoggedIn = true;
   await initOrchestrator();
   vscode.commands.executeCommand('setContext', 'gitpilot:loggedIn', true);
   logger.info('Session 已恢复');
