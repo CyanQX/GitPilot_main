@@ -1,4 +1,4 @@
-# GitPilot v2.0 — 架构重构版
+# GitPilot v2.0
 
 > 🚀 写代码 → 点部署 → GitHub 上就有了。全程不离开 IDE。
 
