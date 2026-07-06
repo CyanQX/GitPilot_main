@@ -170,8 +170,13 @@ export class DeployOrchestrator implements IDeployOrchestrator {
       // ── Step 5: 暂存 ──
       const stepStage = this.createStep('暂存文件');
       this.emit('staging', stepStage);
+      // ⭐ 先 add 全部，再排除 blocked 文件（密钥/构建产物等）
       await this.gitProvider.stageFiles(filterResult.blocked.map((b) => b.file));
       stepStage.status = 'success';
+      stepStage.details = `${filterResult.allowed.length} 个文件待提交`;
+      if (filterResult.blocked.length > 0) {
+        stepStage.details += `，已排除 ${filterResult.blocked.length} 个`;
+      }
       this.finishStep(stepStage);
       steps.push(stepStage);
 

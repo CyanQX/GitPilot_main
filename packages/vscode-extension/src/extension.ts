@@ -331,11 +331,31 @@ async function handleSwitchRepo(): Promise<void> {
     const items = repos.map((r) => ({
       label: r.fullName,
       description: r.private ? '🔒 Private' : '🌐 Public',
-      detail: r.description ?? undefined,
+      detail: r.cloneUrl,
+      repo: r,
     }));
     const picked = await vscode.window.showQuickPick(items, { placeHolder: '选择仓库', matchOnDescription: true });
-    if (picked) { vscode.window.showInformationMessage(`当前仓库: ${picked.label}`); }
-  } catch (e: any) { vscode.window.showErrorMessage(`获取失败: ${e.message}`); }
+    if (!picked) return;
+
+    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!wsRoot) { vscode.window.showErrorMessage('未打开工作区'); return; }
+
+    // ⭐ 更新 git remote
+    if (!gitProvider) gitProvider = new VSCodeGitProvider(wsRoot);
+    const existingUrl = await gitProvider.getRemoteUrl('origin').catch(() => null);
+    if (existingUrl !== picked.repo.cloneUrl) {
+      // 设置新的 origin
+      try { await gitProvider.addRemote('origin', picked.repo.cloneUrl); } catch {}
+    }
+
+    // ⭐ 刷新侧边栏 + 重建 orchestrator
+    sidebarProvider.setRepoName(picked.repo.fullName);
+    await initOrchestrator();
+
+    vscode.window.showInformationMessage(`✅ 已切换至: ${picked.repo.fullName}`);
+    // ⭐ 自动刷新状态
+    vscode.commands.executeCommand('gitpilot.refreshStatus');
+  } catch (e: any) { vscode.window.showErrorMessage(`切换失败: ${e.message}`); }
 }
 
 async function handleRefreshRepos(): Promise<void> {
@@ -473,7 +493,7 @@ async function handleConfigureBuild(): Promise<void> {
 async function showDeployResult(result: DeployResult): Promise<void> {
   if (result.success && result.status === 'no-changes') return;
   if (result.success) {
-    notifier.show({
+    const actionId = await notifier.show({
       type: 'success', title: '🚀 部署成功！',
       message: `提交: ${result.commitHash?.substring(0, 7) ?? '--'} · 耗时 ${(result.totalDurationMs / 1000).toFixed(1)}s`,
       actions: [
@@ -481,6 +501,12 @@ async function showDeployResult(result: DeployResult): Promise<void> {
         ...(result.releaseUrl ? [{ label: '查看 Release', id: 'open-release' }] : []),
       ],
     });
+
+    if (actionId === 'open-repo') {
+      await openRepoInBrowser();
+    } else if (actionId === 'open-release' && result.releaseUrl) {
+      await openUrlInBrowser(result.releaseUrl);
+    }
   } else {
     const isOriginMissing = result.error?.startsWith('ORIGIN_MISSING:');
     const displayMsg = isOriginMissing
@@ -502,6 +528,81 @@ async function showDeployResult(result: DeployResult): Promise<void> {
       vscode.commands.executeCommand('gitpilot.deploy');
     }
   }
+}
+
+// ⭐ 用浏览器打开指定 URL（优先 Edge → Chrome → 报错）
+async function openUrlInBrowser(url: string): Promise<void> {
+  const { exec } = require('child_process');
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+
+  // 检测 Edge 路径
+  const edgePaths = [
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  ];
+  // 检测 Chrome 路径
+  const localAppData = process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local');
+  const chromePaths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    path.join(localAppData, 'Google\\Chrome\\Application\\chrome.exe'),
+  ];
+
+  let browserPath: string | null = null;
+  let browserName = '';
+
+  // 优先 Edge
+  for (const p of edgePaths) {
+    if (fs.existsSync(p)) { browserPath = p; browserName = 'Edge'; break; }
+  }
+  // 其次 Chrome
+  if (!browserPath) {
+    for (const p of chromePaths) {
+      if (fs.existsSync(p)) { browserPath = p; browserName = 'Chrome'; break; }
+    }
+  }
+
+  if (!browserPath) {
+    vscode.window.showErrorMessage(
+      '您的浏览器似乎不在我们的许可中，请更换至对应浏览器（参考 Edge 浏览器和 Google 浏览器）',
+    );
+    return;
+  }
+
+  return new Promise((resolve) => {
+    exec(`start "" "${browserPath}" "${url}"`, { timeout: 5000 }, (err: any) => {
+      if (err) {
+        // 回退到 VS Code 内置打开方式
+        vscode.env.openExternal(vscode.Uri.parse(url));
+      }
+      resolve();
+    });
+  });
+}
+
+// ⭐ 打开当前仓库的 GitHub 页面
+async function openRepoInBrowser(): Promise<void> {
+  // 尝试从 git remote 获取 URL
+  let repoUrl: string | null = null;
+  try {
+    if (gitProvider) {
+      const remoteUrl = await gitProvider.getRemoteUrl('origin');
+      if (remoteUrl) {
+        repoUrl = remoteUrl
+          .replace(/\.git$/, '')
+          .replace(/^git@github\.com:/, 'https://github.com/');
+      }
+    }
+  } catch { /* ignore */ }
+
+  if (!repoUrl) {
+    vscode.window.showErrorMessage('无法获取仓库地址，请手动打开 GitHub。');
+    return;
+  }
+
+  await openUrlInBrowser(repoUrl);
 }
 
 // ---- 初始化 Orchestrator ----

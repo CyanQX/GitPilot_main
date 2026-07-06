@@ -39,13 +39,19 @@ export class VSCodeGitProvider implements IGitProvider {
     return !s.isClean;
   }
 
-  async stageFiles(files?: string[]): Promise<void> {
-    if (files && files.length > 0) {
-      for (const f of files) {
-        try { await this.git.reset(['--', f]); } catch { /* ignore */ }
+  async stageFiles(excludeFiles?: string[]): Promise<void> {
+    // ⭐ 先暂存所有变更
+    await this.git.add('.');
+    // ⭐ 再取消暂存需要排除的文件（密钥、构建产物等）
+    if (excludeFiles && excludeFiles.length > 0) {
+      for (const f of excludeFiles) {
+        // 先用 git reset（适用于已有提交的仓库）
+        try { await this.git.raw(['reset', '--', f]); } catch {
+          // 回退：用 git rm --cached（适用于新仓库无 HEAD 的情况）
+          try { await this.git.raw(['rm', '--cached', '-r', '--quiet', f]); } catch { /* 非关键 */ }
+        }
       }
     }
-    await this.git.add('.');
   }
 
   async commit(message: string): Promise<CommitResult> {

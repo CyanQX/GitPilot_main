@@ -2,7 +2,7 @@
   "name": "gitpilot",
   "displayName": "GitPilot",
   "description": "🚀 写代码 → 点部署 → GitHub 上就有了。全程不离开 VS Code。",
-  "version": "1.2.5",
+  "version": "1.2.7",
   "publisher": "gitpilot",
   "license": "MIT",
   "engines": { "vscode": "^1.85.0" },

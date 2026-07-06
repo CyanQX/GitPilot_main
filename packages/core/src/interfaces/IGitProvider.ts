@@ -18,7 +18,7 @@ export interface IGitProvider {
   /** 是否有未提交的变更 */
   hasChanges(): Promise<boolean>;
 
-  /** 暂存文件 */
+  /** 暂存所有文件，排除指定文件（密钥/构建产物等） */
   stageFiles(files?: string[]): Promise<void>;
 
   /** 提交 */
