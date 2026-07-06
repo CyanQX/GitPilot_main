@@ -136,16 +136,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${vscode.Uri.parse('').scheme}: https: data:; script-src 'unsafe-inline'; style-src 'unsafe-inline';">
 <style>
   :root{
-    --bg:var(--vscode-sideBar-background);
-    --fg:var(--vscode-sideBar-foreground);
-    --btn:var(--vscode-button-background);
-    --btn-fg:var(--vscode-button-foreground);
-    --btn-hover:var(--vscode-button-hoverBackground);
-    --input-bg:var(--vscode-input-background);
-    --input-border:var(--vscode-input-border);
-    --desc:var(--vscode-descriptionForeground);
-    --accent:#58a6ff;
-    --green:#3fb950;
+    --bg:#e8f4fd;
+    --fg:#1a1a2e;
+    --btn:#0366d6;
+    --btn-fg:#fff;
+    --btn-hover:#0256b9;
+    --input-bg:#ffffff;
+    --input-border:#c8dff5;
+    --desc:#5a7a9a;
+    --accent:#0366d6;
+    --green:#22863a;
   }
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:var(--vscode-font-family);font-size:13px;color:var(--fg);padding:0;background:var(--bg)}
@@ -154,34 +154,36 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   .account-card{
     display:flex;align-items:center;gap:10px;
     padding:12px 14px;margin:10px;border-radius:8px;
-    background:linear-gradient(135deg,#1a2332 0%,#162030 100%);
-    border:1px solid #30363d;
+    background:linear-gradient(135deg,#d6eaf8 0%,#bddaf0 100%);
+    border:1px solid #b0cfe8;
   }
   .avatar{
-    width:40px;height:40px;border-radius:50%;background:#30363d;
+    width:40px;height:40px;border-radius:50%;background:#c8dff5;
     display:flex;align-items:center;justify-content:center;
     font-size:18px;flex-shrink:0;overflow:hidden;
+    border:2px solid #fff;
   }
   .avatar img{width:40px;height:40px;border-radius:50%;display:block}
   .account-info{flex:1;min-width:0}
-  .account-name{font-size:14px;font-weight:700;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .account-desc{font-size:11px;color:#8b949e;margin-top:1px}
+  .account-name{font-size:14px;font-weight:700;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .account-desc{font-size:11px;color:#5a7a9a;margin-top:1px}
   .btn-logout{
     padding:4px 10px;border-radius:4px;border:1px solid #f8514933;
-    background:transparent;color:#f85149;font-size:11px;cursor:pointer;font-family:inherit;
+    background:transparent;color:#d73a49;font-size:11px;cursor:pointer;font-family:inherit;
     flex-shrink:0;
   }
-  .btn-logout:hover{background:#f851491a}
+  .btn-logout:hover{background:#f8514915}
 
   /* ── 仓库选择区 ── */
   .repo-card{
     margin:0 10px 10px;padding:8px 12px;border-radius:6px;
     background:var(--input-bg);border:1px solid var(--input-border);
+    box-shadow:0 1px 3px rgba(0,0,0,.04);
   }
   .repo-row{display:flex;align-items:center;justify-content:space-between}
   .repo-label{font-size:10px;font-weight:600;color:var(--desc);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
   .repo-name{font-size:13px;font-weight:600;color:var(--accent)}
-  .repo-badge{font-size:10px;padding:2px 6px;border-radius:10px;background:#30363d;color:#8b949e;margin-left:6px}
+  .repo-badge{font-size:10px;padding:2px 6px;border-radius:10px;background:#e8f4fd;color:#5a7a9a;margin-left:6px}
 
   /* ── 操作按钮区 ── */
   .action-area{margin:0 10px 10px}
@@ -189,49 +191,51 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   .btn-deploy{
     flex:1;padding:10px;border:none;border-radius:6px;
     font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
-    background:linear-gradient(135deg,#238636,#2ea043);color:#fff;
-    box-shadow:0 1px 3px rgba(0,0,0,.3);
+    background:linear-gradient(135deg,#22863a,#2ea043);color:#fff;
+    box-shadow:0 2px 6px rgba(34,134,58,.25);
     transition:opacity .15s;
   }
   .btn-deploy:hover{opacity:.9}
   .btn-sync{
     padding:10px 16px;border:none;border-radius:6px;
     font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
-    background:var(--input-bg);color:var(--fg);
+    background:#fff;color:var(--accent);
     border:1px solid var(--input-border);
+    box-shadow:0 1px 3px rgba(0,0,0,.04);
   }
-  .btn-sync:hover{background:var(--btn-hover)}
+  .btn-sync:hover{background:#f0f7ff}
 
   /* ── 构建命令区 ── */
   .build-card{
     margin:0 10px 10px;padding:8px 12px;border-radius:6px;
     background:var(--input-bg);border:1px solid var(--input-border);
+    box-shadow:0 1px 3px rgba(0,0,0,.04);
   }
   .build-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
   .build-label{font-size:10px;font-weight:600;color:var(--desc);text-transform:uppercase;letter-spacing:0.5px}
-  .build-cmd{font-size:12px;color:#8b949e;font-family:var(--vscode-editor-font-family);word-break:break-all}
+  .build-cmd{font-size:12px;color:#5a7a9a;font-family:var(--vscode-editor-font-family);word-break:break-all}
 
   /* ── 仓库管理区 ── */
   .mgmt-area{margin:0 10px 10px}
   .mgmt-row{display:flex;gap:6px}
   .btn-mgmt{
     flex:1;padding:6px 8px;border-radius:4px;border:1px solid var(--input-border);
-    background:transparent;color:var(--fg);font-size:11px;font-family:inherit;cursor:pointer;
+    background:#fff;color:var(--fg);font-size:11px;font-family:inherit;cursor:pointer;
     text-align:center;
   }
-  .btn-mgmt:hover{background:var(--input-bg)}
+  .btn-mgmt:hover{background:#f0f7ff}
 
   /* ── 状态栏 ── */
   .status-bar{
     margin:0 10px 10px;padding:6px 10px;border-radius:4px;
-    background:#1a2332;border:1px solid #30363d;
+    background:#d6eaf8;border:1px solid #b0cfe8;
     display:flex;align-items:center;gap:6px;font-size:11px;
   }
   .status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
   .status-dot.ok{background:var(--green)}
-  .status-dot.off{background:#f85149}
+  .status-dot.off{background:#d73a49}
   .status-dot.loading{background:#d29922;animation:pulse 1s infinite}
-  .status-text{color:#8b949e}
+  .status-text{color:#5a7a9a}
 
   /* ── 分割线 ── */
   .divider{height:1px;background:var(--input-border);margin:8px 10px}
@@ -242,18 +246,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     display:flex;align-items:center;justify-content:center;gap:8px;
     width:calc(100% - 20px);margin:10px;padding:12px;border:none;border-radius:8px;
     font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
-    background:linear-gradient(135deg,#238636,#2ea043);color:#fff;
-    box-shadow:0 2px 6px rgba(0,0,0,.3);
+    background:linear-gradient(135deg,#22863a,#2ea043);color:#fff;
+    box-shadow:0 2px 6px rgba(34,134,58,.25);
   }
   .btn-login-full:hover{opacity:.9}
   .github-icon{width:20px;height:20px}
 
   .btn-icon{
     padding:2px 6px;border-radius:3px;border:1px solid var(--input-border);
-    background:transparent;color:var(--desc);font-size:10px;cursor:pointer;font-family:inherit;
+    background:#fff;color:var(--desc);font-size:10px;cursor:pointer;font-family:inherit;
     transition:transform .3s;
   }
-  .btn-icon:hover{color:var(--fg);background:var(--input-bg)}
+  .btn-icon:hover{color:var(--fg);background:#f0f7ff}
   .btn-icon.spinning{animation:spin 1s linear infinite;color:var(--accent);pointer-events:none}
 
   @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
