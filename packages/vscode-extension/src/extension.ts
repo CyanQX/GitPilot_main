@@ -113,6 +113,23 @@ function registerCommands(context: vscode.ExtensionContext): void {
 async function handleDeploy(): Promise<void> {
   try {
   if (!orchestrator) { vscode.window.showWarningMessage('请先登录 GitHub'); return; }
+
+  // ⭐ 部署前检查 origin 远程是否配置
+  if (gitProvider) {
+    const remoteUrl = await gitProvider.getRemoteUrl('origin').catch(() => null);
+    if (!remoteUrl) {
+      const create = await vscode.window.showWarningMessage(
+        '本地仓库未关联 GitHub 远程仓库。',
+        { modal: false },
+        '创建仓库并关联',
+      );
+      if (create === '创建仓库并关联') {
+        vscode.commands.executeCommand('gitpilot.createRepo');
+      }
+      return;
+    }
+  }
+
   if (!(await orchestrator.hasPendingChanges())) {
     vscode.window.showInformationMessage('✅ 没有需要部署的变更');
     return;
@@ -263,6 +280,28 @@ async function handleCreateRepo(): Promise<void> {
   try {
     const repo = await repoProvider.createRepo({ name, private: priv === '私有', autoInit: true });
     vscode.window.showInformationMessage(`✅ 已创建: ${repo.fullName}`);
+
+    // ⭐ 自动设置本地 git remote
+    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (wsRoot) {
+      // 确保 gitProvider 已初始化
+      if (!gitProvider) {
+        gitProvider = new VSCodeGitProvider(wsRoot);
+      }
+      const isRepo = await gitProvider.isRepo();
+      if (!isRepo) {
+        await gitProvider.init();
+        vscode.window.showInformationMessage('已初始化本地 Git 仓库');
+      }
+      // 检查 origin 是否已存在
+      const existingUrl = await gitProvider.getRemoteUrl('origin').catch(() => null);
+      if (!existingUrl) {
+        await gitProvider.addRemote('origin', repo.cloneUrl);
+        vscode.window.showInformationMessage(`🔗 已关联远程仓库: ${repo.fullName}`);
+      }
+      // 刷新侧边栏
+      sidebarProvider.setRepoName(repo.fullName);
+    }
   } catch (e: any) { vscode.window.showErrorMessage(`创建失败: ${e.message}`); }
 }
 

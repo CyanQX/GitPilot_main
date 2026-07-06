@@ -62,6 +62,25 @@ export class VSCodeGitProvider implements IGitProvider {
   }
 
   async push(remote: string = 'origin', branch?: string): Promise<PushResult> {
+    // ⭐ 检查 remote 是否存在
+    try {
+      const remotes = await this.git.getRemotes(true);
+      const remoteExists = remotes.some((r) => r.name === remote);
+      if (!remoteExists) {
+        return {
+          success: false, pushed: false,
+          error: `远程仓库 "${remote}" 未配置。请先创建 GitHub 仓库或执行: git remote add ${remote} <url>`,
+          nonFastForward: false,
+        };
+      }
+    } catch {
+      return {
+        success: false, pushed: false,
+        error: '当前目录不是 Git 仓库。请先点击「创建仓库」在 GitHub 创建并关联。',
+        nonFastForward: false,
+      };
+    }
+
     let target = branch ?? (await this.getCurrentBranch());
 
     // ⭐ 验证分支是否存在于本地，不存在则回退到当前分支
