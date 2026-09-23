@@ -1,4 +1,4 @@
-// GitPilot Sidebar — WebView Provider（支持登录状态持久化）
+// GitPilot Sidebar — WebView Provider (supports login state persistence)
 // ============================================================
 import * as vscode from 'vscode';
 
@@ -8,8 +8,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _loginName = '';
   private _repoName = '';
   private _buildCmd = '';
-  private _status = '未登录';
-  private _statusText = '刷新后同步仓库、部署与构建状态';
+  private _status = 'Not signed in';
+  private _statusText = 'Refresh to sync repository, deploy and build status';
 
   private _avatarUrl = '';
 
@@ -19,11 +19,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._view = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
-      retainContextWhenHidden: true, // ⭐ 切换标签页不销毁 webview
+      retainContextWhenHidden: true, // ⭐ Keep the webview alive when switching tabs
     };
     webviewView.webview.html = this.getHtml();
 
-    // webview 就绪后，立即发送当前状态
+    // Send the current state as soon as the webview is ready
     webviewView.webview.onDidReceiveMessage((msg) => {
       switch (msg.command) {
         case 'deploy':   vscode.commands.executeCommand('gitpilot.deploy'); break;
@@ -35,13 +35,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         case 'refreshRepos': vscode.commands.executeCommand('gitpilot.refreshStatus'); break;
         case 'configureBuild': vscode.commands.executeCommand('gitpilot.configureBuild'); break;
         case 'getState':
-          // ⭐ webview 请求当前状态 → 立即恢复
+          // ⭐ The webview requests the current state → restore it immediately
           this._pushState();
           break;
       }
     });
 
-    // ⭐ 如果已登录，立即恢复状态（处理 webview 重建场景）
+    // ⭐ If logged in, restore the state immediately (handles webview rebuilds)
     if (this._isLoggedIn) {
       this._pushState();
     }
@@ -50,15 +50,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   refresh(): void {
     if (this._view) {
       this._view.webview.html = this.getHtml();
-      // ⭐ 重建 HTML 后立即恢复状态
+      // ⭐ Restore the state immediately after rebuilding the HTML
       if (this._isLoggedIn) {
-        // 需要等 webview 加载完再发消息
+        // Wait for the webview to finish loading before sending the message
         setTimeout(() => this._pushState(), 100);
       }
     }
   }
 
-  /** ⭐ 推送当前完整状态到 webview */
+  /** ⭐ Push the full current state to the webview */
   private _pushState(): void {
     if (!this._view) return;
     this._view.webview.postMessage({
@@ -72,53 +72,53 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** ⭐ 设置已登录状态 */
+  /** ⭐ Set the logged-in state */
   setLoggedIn(login: string, avatarUrl?: string): void {
     this._isLoggedIn = true;
     this._loginName = login;
     this._avatarUrl = avatarUrl ?? '';
-    this._status = '✅ 就绪';
-    this._statusText = '刷新后同步仓库、部署与构建状态';
+    this._status = '✅ Ready';
+    this._statusText = 'Refresh to sync repository, deploy and build status';
     this._pushState();
   }
 
-  /** ⭐ 设置已登出状态 */
+  /** ⭐ Set the logged-out state */
   setLoggedOut(): void {
     this._isLoggedIn = false;
     this._loginName = '';
     this._repoName = '';
     this._buildCmd = '';
-    this._status = '未登录';
-    this._statusText = '请先登录 GitHub 账号';
+    this._status = 'Not signed in';
+    this._statusText = 'Please sign in to your GitHub account first';
     this._pushState();
   }
 
-  /** ⭐ 更新仓库名称 */
+  /** ⭐ Update the repository name */
   setRepoName(name: string): void {
     this._repoName = name;
     this._pushState();
   }
 
-  /** ⭐ 更新构建命令 */
+  /** ⭐ Update the build command */
   setBuildCmd(cmd: string): void {
     this._buildCmd = cmd;
     this._pushState();
   }
 
-  /** ⭐ 更新状态文本 */
+  /** ⭐ Update the status text */
   setStatus(status: string, statusText?: string): void {
     this._status = status;
     if (statusText !== undefined) this._statusText = statusText;
     this._pushState();
   }
 
-  // ---- 兼容旧 API（外部仍然可以用 postMessage） ----
+  // ---- Legacy API compatibility (postMessage still works from the outside) ----
   postMessage(msg: any): void {
-    // 更新内部状态
+    // Update the internal state
     if (msg.loggedIn !== undefined) {
       this._isLoggedIn = msg.loggedIn;
       if (msg.loggedIn) {
-        this._status = msg.status ?? '✅ 就绪';
+        this._status = msg.status ?? '✅ Ready';
       }
     }
     if (msg.repoName !== undefined) this._repoName = msg.repoName;
@@ -131,7 +131,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   // ---- HTML ----
   private getHtml(): string {
     return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${vscode.Uri.parse('').scheme}: https: data:; script-src 'unsafe-inline'; style-src 'unsafe-inline';">
 <style>
@@ -150,7 +150,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:var(--vscode-font-family);font-size:13px;color:var(--fg);padding:0;background:var(--bg)}
 
-  /* ── 账号卡片 ── */
+  /* ── Account card ── */
   .account-card{
     display:flex;align-items:center;gap:10px;
     padding:12px 14px;margin:10px;border-radius:8px;
@@ -174,7 +174,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
   .btn-logout:hover{background:#f8514915}
 
-  /* ── 仓库选择区 ── */
+  /* ── Repository selector ── */
   .repo-card{
     margin:0 10px 10px;padding:8px 12px;border-radius:6px;
     background:var(--input-bg);border:1px solid var(--input-border);
@@ -185,7 +185,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   .repo-name{font-size:13px;font-weight:600;color:var(--accent)}
   .repo-badge{font-size:10px;padding:2px 6px;border-radius:10px;background:#e8f4fd;color:#5a7a9a;margin-left:6px}
 
-  /* ── 操作按钮区 ── */
+  /* ── Action buttons ── */
   .action-area{margin:0 10px 10px}
   .action-row{display:flex;gap:8px}
   .btn-deploy{
@@ -205,7 +205,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
   .btn-sync:hover{background:#f0f7ff}
 
-  /* ── 构建命令区 ── */
+  /* ── Build command area ── */
   .build-card{
     margin:0 10px 10px;padding:8px 12px;border-radius:6px;
     background:var(--input-bg);border:1px solid var(--input-border);
@@ -215,7 +215,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   .build-label{font-size:10px;font-weight:600;color:var(--desc);text-transform:uppercase;letter-spacing:0.5px}
   .build-cmd{font-size:12px;color:#5a7a9a;font-family:var(--vscode-editor-font-family);word-break:break-all}
 
-  /* ── 仓库管理区 ── */
+  /* ── Repository management ── */
   .mgmt-area{margin:0 10px 10px}
   .mgmt-row{display:flex;gap:6px}
   .btn-mgmt{
@@ -225,7 +225,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
   .btn-mgmt:hover{background:#f0f7ff}
 
-  /* ── 状态栏 ── */
+  /* ── Status bar ── */
   .status-bar{
     margin:0 10px 10px;padding:6px 10px;border-radius:4px;
     background:#d6eaf8;border:1px solid #b0cfe8;
@@ -237,10 +237,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   .status-dot.loading{background:#d29922;animation:pulse 1s infinite}
   .status-text{color:#5a7a9a}
 
-  /* ── 分割线 ── */
+  /* ── Divider ── */
   .divider{height:1px;background:var(--input-border);margin:8px 10px}
 
-  /* ── 登录按钮 ── */
+  /* ── Login button ── */
   .login-area{padding:10px}
   .btn-login-full{
     display:flex;align-items:center;justify-content:center;gap:8px;
@@ -267,7 +267,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 </style></head>
 <body>
 
-<!-- ════ 未登录状态 ════ -->
+<!-- ════ Logged-out state ════ -->
 <div id="panel-logged-out">
   <div class="login-area">
     <button class="btn-login-full" id="btn-login">
@@ -277,10 +277,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   </div>
 </div>
 
-<!-- ════ 已登录状态 ════ -->
+<!-- ════ Logged-in state ════ -->
 <div id="panel-logged-in" class="hidden">
 
-  <!-- 账号卡片 -->
+  <!-- Account card -->
   <div class="account-card">
     <div class="avatar" id="avatar-area">
       <span id="avatar-text" style="font-size:18px">🐱</span>
@@ -288,27 +288,27 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     </div>
     <div class="account-info">
       <div class="account-name" id="account-name">GitHub</div>
-      <div class="account-desc">github账号昵称显示位置</div>
+      <div class="account-desc">GitHub account nickname</div>
     </div>
-    <button class="btn-logout" id="btn-logout">登出</button>
+    <button class="btn-logout" id="btn-logout">Sign out</button>
   </div>
 
-  <!-- 仓库选择 -->
+  <!-- Repository selector -->
   <div class="repo-card">
-    <div class="repo-label">📦 当前仓库</div>
+    <div class="repo-label">📦 Current repository</div>
     <div class="repo-row">
       <div>
         <span class="repo-name" id="repo-name">--</span>
         <span class="repo-badge" id="repo-badge" style="display:none">Public</span>
       </div>
       <div style="display:flex;gap:4px">
-        <button class="btn-icon" id="btn-switchRepo" title="切换仓库">🔄</button>
-        <button class="btn-icon" id="btn-refreshRepos" title="刷新状态">🔃</button>
+        <button class="btn-icon" id="btn-switchRepo" title="Switch repository">🔄</button>
+        <button class="btn-icon" id="btn-refreshRepos" title="Refresh status">🔃</button>
       </div>
     </div>
   </div>
 
-  <!-- 操作按钮 -->
+  <!-- Action buttons -->
   <div class="action-area">
     <div class="action-row">
       <button class="btn-deploy" id="btn-deploy">🚀 Deploy</button>
@@ -316,31 +316,31 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     </div>
   </div>
 
-  <!-- 构建命令 -->
+  <!-- Build command -->
   <div class="build-card">
     <div class="build-header">
-      <span class="build-label">🔨 构建命令</span>
-      <button class="btn-icon" id="btn-configureBuild" title="配置构建命令">⚙️</button>
+      <span class="build-label">🔨 Build command</span>
+      <button class="btn-icon" id="btn-configureBuild" title="Configure build command">⚙️</button>
     </div>
-    <div class="build-cmd" id="build-cmd">未配置</div>
+    <div class="build-cmd" id="build-cmd">Not configured</div>
   </div>
 
   <div class="divider"></div>
 
-  <!-- 仓库管理 -->
+  <!-- Repository management -->
   <div class="mgmt-area">
     <div class="mgmt-row">
-      <button class="btn-mgmt" id="btn-createRepo">+ 创建仓库</button>
+      <button class="btn-mgmt" id="btn-createRepo">+ Create repository</button>
     </div>
   </div>
 
   <div class="divider"></div>
 
-  <!-- 状态栏 -->
+  <!-- Status bar -->
   <div class="status-bar">
     <span class="status-dot ok" id="status-dot"></span>
-    <span class="status-text" id="status-text">刷新后同步仓库、部署与构建状态</span>
-    <span style="margin-left:auto;color:var(--green);font-weight:600" id="status-label">就绪</span>
+    <span class="status-text" id="status-text">Refresh to sync repository, deploy and build status</span>
+    <span style="margin-left:auto;color:var(--green);font-weight:600" id="status-label">Ready</span>
   </div>
 </div>
 
@@ -349,7 +349,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   var vscode = acquireVsCodeApi();
   function send(cmd){ vscode.postMessage({command:cmd}); }
 
-  // 绑定按钮
+  // Bind buttons
   function bind(id, cmd){
     var el = document.getElementById(id);
     if(el) el.addEventListener('click', function(){ send(cmd); });
@@ -363,13 +363,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   bind('btn-refreshRepos', 'refreshRepos');
   bind('btn-configureBuild', 'configureBuild');
 
-  // ⭐ 渲染已登录 UI
+  // ⭐ Render the logged-in UI
   function renderLoggedIn(loginName, avatarUrl) {
     document.getElementById('panel-logged-out').classList.add('hidden');
     document.getElementById('panel-logged-in').classList.remove('hidden');
     var nameDisplay = loginName || 'GitHub';
     document.getElementById('account-name').textContent = nameDisplay;
-    // 头像
+    // Avatar
     var avatarText = document.getElementById('avatar-text');
     var avatarImg = document.getElementById('avatar-img');
     if (avatarUrl && avatarUrl.length > 5) {
@@ -386,13 +386,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  // ⭐ 渲染未登录 UI
+  // ⭐ Render the logged-out UI
   function renderLoggedOut() {
     document.getElementById('panel-logged-out').classList.remove('hidden');
     document.getElementById('panel-logged-in').classList.add('hidden');
   }
 
-  // ⭐ 刷新按钮动画
+  // ⭐ Refresh button animation
   var refreshBtn = document.getElementById('btn-refreshRepos');
   var statusDot = document.getElementById('status-dot');
   var statusText = document.getElementById('status-text');
@@ -405,8 +405,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       refreshBtn.style.pointerEvents = 'none';
     }
     if (statusDot) { statusDot.className = 'status-dot loading'; }
-    if (statusText) { statusText.textContent = '正在刷新仓库状态...'; }
-    if (statusLabel) { statusLabel.textContent = '刷新中'; }
+    if (statusText) { statusText.textContent = 'Refreshing repository status...'; }
+    if (statusLabel) { statusLabel.textContent = 'Refreshing'; }
   }
 
   function endRefresh(ok, msg) {
@@ -416,10 +416,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
     if (statusDot) { statusDot.className = ok ? 'status-dot ok' : 'status-dot off'; }
     if (statusText) { statusText.textContent = msg || ''; }
-    if (statusLabel) { statusLabel.textContent = ok ? '就绪' : '错误'; }
+    if (statusLabel) { statusLabel.textContent = ok ? 'Ready' : 'Error'; }
   }
 
-  // ⭐ 接收来自扩展的消息
+  // ⭐ Receive messages from the extension
   window.addEventListener('message', function(e){
     var d = e.data;
     if (d.loggedIn !== undefined) {
@@ -433,22 +433,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       document.getElementById('repo-name').textContent = d.repoName;
     }
     if (d.buildCmd !== undefined) {
-      document.getElementById('build-cmd').textContent = d.buildCmd || '未配置';
+      document.getElementById('build-cmd').textContent = d.buildCmd || 'Not configured';
     }
     if (d.status !== undefined) {
       if (statusText) statusText.textContent = d.statusText || d.status;
       if (statusLabel) statusLabel.textContent = d.status;
-      if (statusDot) statusDot.className = (d.status.indexOf('失败')>=0 || d.status.indexOf('错误')>=0) ? 'status-dot off' : 'status-dot ok';
+      if (statusDot) statusDot.className = (String(d.status).toLowerCase().indexOf('fail')>=0 || String(d.status).toLowerCase().indexOf('error')>=0) ? 'status-dot off' : 'status-dot ok';
     }
-    // ⭐ 刷新状态消息
+    // ⭐ Refresh state messages
     if (d.refreshState === 'start') {
       startRefresh();
     } else if (d.refreshState === 'done') {
-      endRefresh(true, d.statusText || '刷新完成');
+      endRefresh(true, d.statusText || 'Refresh complete');
     } else if (d.refreshState === 'error') {
-      endRefresh(false, d.statusText || '报错！请检查网络是否正常');
+      endRefresh(false, d.statusText || 'Error! Please check your network connection');
     }
-    // ⭐ 头像更新
+    // ⭐ Avatar update
     if (d.avatarUrl !== undefined && d.avatarUrl && d.avatarUrl.length > 5) {
       var at = document.getElementById('avatar-text');
       var ai = document.getElementById('avatar-img');
@@ -457,7 +457,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
   });
 
-  // ⭐ 请求当前状态
+  // ⭐ Request the current state
   send('getState');
 })();
 </script>
